@@ -5,8 +5,8 @@
 // Config
 
 const char DEVICE_NAME[] = "soil_calibrator";
-#define WIFI_SSID "Handy"
-#define WIFI_PASS "things11"
+#define WIFI_SSID "cqu-iot"
+#define WIFI_PASS "realfakedoors"
 #define SERVER_ADDRESS "www.dweet.io"
 const int SERVER_PORT = 80;
 const char GET_REQUEST[] = "/dweet/for/";
@@ -18,13 +18,17 @@ const int NUM_SOIL_FORKS = 2;
 const int NUM_GYPSUM_SENSORS = 2;
 const int NUM_LOAD_CELLS = 2;
 
+const float INPUT_VOLTAGE = 5;
+const float DIODE_FORWARD_VOLTAGE = 0.7;
+const long HYGROMETER_RESISTANCE = 4700;
+
 const int PACKET_BUFFER_SIZE = 400;
 const int DATESTRING_SIZE = 30;
 
-const long SAMPLE_INTERVAL = 30000;
+const long SAMPLE_INTERVAL = 5000;
 const long UPLOAD_INTERVAL = SAMPLE_INTERVAL * 2;
 
-const float LOAD_CELL_CALIBRATION_FACTOR = 1.0;
+const float LOAD_CELL_CALIBRATION_FACTOR = 391.625;
 const int NUM_LOAD_CELLS_READS = 10;
 
 

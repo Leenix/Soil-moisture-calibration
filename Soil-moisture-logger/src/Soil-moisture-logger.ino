@@ -32,13 +32,13 @@ void setup(){
     /**
     * Initialise the calibration test.
     */
-    Log.Init(LOG_LEVEL_DEBUG, 57600);
+    Log.Init(LOG_LEVEL_VERBOSE, 57600);
     Log.Info(P("Soil moisture calibration logger"));
 
     start_hygrometer();
     start_soil_forks();
     start_load_cells();
-    start_wifi();
+    //start_wifi();
 }
 
 
@@ -94,14 +94,26 @@ int get_gypsum_moisture(int sensor_number){
 	// Measure resistance through left side
 	hygrometer_off();
 	digitalWrite(HYGROMETER_CONTROL[LEFT], HIGH);
-	int hygrometer_left = analogRead(HYGROMETER_LEFT[sensor_number]);
+    delay(1000);
+	unsigned int hygrometer_left = analogRead(HYGROMETER_LEFT[sensor_number]);
+    Log.Verbose(P("Hygrometer left: %d"), hygrometer_left);
 
 	// Measure resistance through right side to reduce galvanic corrosion
 	hygrometer_off();
 	digitalWrite(HYGROMETER_CONTROL[RIGHT], HIGH);
-	int hygrometer_right = analogRead(HYGROMETER_RIGHT[sensor_number]);
+    delay(1000);
+	unsigned int hygrometer_right = analogRead(HYGROMETER_RIGHT[sensor_number]);
+    Log.Verbose(P("Hygrometer right: %d"), hygrometer_right);
 
-    int hygrometer_reading = (hygrometer_left + hygrometer_right)/2;
+    hygrometer_off();
+
+    unsigned int hygrometer_reading = (hygrometer_left + hygrometer_right)/2;
+
+    char value[8];
+    float gypsum_voltage = hygrometer_left*(INPUT_VOLTAGE)/1024;
+    unsigned long hygrometer_resistance = (HYGROMETER_RESISTANCE * (INPUT_VOLTAGE- DIODE_FORWARD_VOLTAGE))/gypsum_voltage - HYGROMETER_RESISTANCE;
+    dtostrf(gypsum_voltage, 0, 3, value);
+    Log.Verbose(P("Gypsum voltage:\t%sV"), value);
 
     Log.Debug(P("Hygrometer %d reading: %d"), sensor_number, hygrometer_reading);
 	return hygrometer_reading;
@@ -142,7 +154,7 @@ int get_soil_fork_moisture(int num_fork){
 	*/
 	num_fork = constrain(num_fork, 0, 1);
 	int soil_fork_reading = analogRead(SOIL_FORKS[num_fork]);
-    Log.Debug(P("Soil fork %d reading: d"), num_fork, soil_fork_reading);
+    Log.Debug(P("Soil fork %d reading: %d"), num_fork, soil_fork_reading);
 
     return soil_fork_reading;
 }
@@ -167,6 +179,8 @@ void start_load_cells(){
         load_cells[i].power_up();
         load_cells[i].set_scale(LOAD_CELL_CALIBRATION_FACTOR);
     }
+
+    timer.setInterval(SAMPLE_INTERVAL, update_load_cells);
 }
 
 
@@ -258,6 +272,7 @@ void assemble_data_packet(char* packet_buffer){
 
     for (int i = 0; i < NUM_LOAD_CELLS; i++) {
         sprintf(entry, P("&mass%d=%d"), i, data.mass[i]);
+        add_to_array(packet_buffer, entry);
     }
 }
 
