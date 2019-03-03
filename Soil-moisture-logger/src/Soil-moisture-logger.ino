@@ -11,8 +11,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 // Objects
 
-HX711 scale_1(A1, A2);
-HX711 scale_2(A3, A4);
+HX711 scale_1(A4, A5);
+HX711 scale_2(10, 11);
 HX711 load_cells[] = {scale_1, scale_2};
 
 SoftwareSerial wifi_bridge(WIFI_RX, WIFI_TX);
@@ -38,7 +38,15 @@ void setup(){
     start_hygrometer();
     start_soil_forks();
     start_load_cells();
-    //start_wifi();
+    start_wifi();
+
+    pinMode(HYGROMETER_CONTROL[LEFT], OUTPUT);
+    pinMode(HYGROMETER_CONTROL[RIGHT], OUTPUT);
+    pinMode(HYGROMETER_1_LEFT, INPUT);
+    pinMode(HYGROMETER_2_LEFT, INPUT);
+    pinMode(HYGROMETER_1_RIGHT, INPUT);
+    pinMode(HYGROMETER_2_RIGHT, INPUT);
+
 }
 
 
@@ -48,20 +56,39 @@ void loop(){
     * All functions fire from callback events
     */
     timer.run();
+
+    // int moisture = analogRead(HYGROMETER_1_RIGHT);
+    // char value[8];
+    // float gypsum_voltage = moisture*(INPUT_VOLTAGE)/1024;
+    // unsigned long hygrometer_resistance = (HYGROMETER_RESISTANCE * (INPUT_VOLTAGE- DIODE_FORWARD_VOLTAGE))/gypsum_voltage - HYGROMETER_RESISTANCE;
+    // dtostrf(gypsum_voltage, 0, 3, value);
+    // Log.Verbose(P("Gypsum 1| raw: %d\tvoltage: %sV\tresistance: %d"), moisture, value, hygrometer_resistance);
+    // Serial.print(hygrometer_resistance);
+    //
+    // moisture = analogRead(HYGROMETER_2_RIGHT);
+    // gypsum_voltage = moisture*(INPUT_VOLTAGE)/1024;
+    // hygrometer_resistance = (HYGROMETER_RESISTANCE * (INPUT_VOLTAGE- DIODE_FORWARD_VOLTAGE))/gypsum_voltage - HYGROMETER_RESISTANCE;
+    // dtostrf(gypsum_voltage, 0, 3, value);
+    // Log.Verbose(P("Gypsum 2| raw: %d\tvoltage: %sV\tresistance: %d"), moisture, value, hygrometer_resistance);
+    //
+    // delay(500);
 }
 
 
 //////////////////////////////////////////////////////////////////////////
 // Gypsum block sensors (homemade)
-
 void start_hygrometer(){
 	/**
 	* Start the gypsum sensors
 	*/
-	pinMode(HYGROMETER_CONTROL[LEFT], OUTPUT);
-	pinMode(HYGROMETER_CONTROL[RIGHT], OUTPUT);
+    pinMode(HYGROMETER_CONTROL[LEFT], OUTPUT);
+    pinMode(HYGROMETER_CONTROL[RIGHT], OUTPUT);
+    pinMode(HYGROMETER_1_LEFT, INPUT);
+    pinMode(HYGROMETER_2_LEFT, INPUT);
+    pinMode(HYGROMETER_1_RIGHT, INPUT);
+    pinMode(HYGROMETER_2_RIGHT, INPUT);
 
-	hygrometer_off();
+	hygrometers_off();
 
 	update_gypsum_sensors();
 	timer.setInterval(SAMPLE_INTERVAL, update_gypsum_sensors);
@@ -69,7 +96,7 @@ void start_hygrometer(){
 }
 
 
-void hygrometer_off(){
+void hygrometers_off(){
 	/**
 	* Cut power to the hygrometer(s)
     * All hygrometers currently share the same power/enable pins.
@@ -77,6 +104,20 @@ void hygrometer_off(){
 	*/
 	digitalWrite(HYGROMETER_CONTROL[LEFT], LOW);
 	digitalWrite(HYGROMETER_CONTROL[RIGHT], LOW);
+    delay(HYGROMETER_OFF_DELAY);
+}
+
+
+void active_hygrometer(bool side){
+    if (side == LEFT){
+        digitalWrite(HYGROMETER_CONTROL[RIGHT], LOW);
+        digitalWrite(HYGROMETER_CONTROL[LEFT], HIGH);
+    }else{
+        digitalWrite(HYGROMETER_CONTROL[LEFT], LOW);
+        digitalWrite(HYGROMETER_CONTROL[RIGHT], HIGH);
+    }
+
+    delay(HYGROMETER_ON_DELAY);
 }
 
 
@@ -92,28 +133,24 @@ int get_gypsum_moisture(int sensor_number){
 	sensor_number = constrain(sensor_number, 0, NUM_GYPSUM_SENSORS);
 
 	// Measure resistance through left side
-	hygrometer_off();
-	digitalWrite(HYGROMETER_CONTROL[LEFT], HIGH);
-    delay(1000);
-	unsigned int hygrometer_left = analogRead(HYGROMETER_LEFT[sensor_number]);
+	active_hygrometer(LEFT);
+	int hygrometer_left = analogRead(HYGROMETER_LEFT[sensor_number]);
+    hygrometers_off();
     Log.Verbose(P("Hygrometer left: %d"), hygrometer_left);
 
 	// Measure resistance through right side to reduce galvanic corrosion
-	hygrometer_off();
-	digitalWrite(HYGROMETER_CONTROL[RIGHT], HIGH);
-    delay(1000);
-	unsigned int hygrometer_right = analogRead(HYGROMETER_RIGHT[sensor_number]);
+	active_hygrometer(RIGHT);
+	int hygrometer_right = analogRead(HYGROMETER_RIGHT[sensor_number]);
+    hygrometers_off();
     Log.Verbose(P("Hygrometer right: %d"), hygrometer_right);
 
-    hygrometer_off();
-
-    unsigned int hygrometer_reading = (hygrometer_left + hygrometer_right)/2;
+    int hygrometer_reading = (hygrometer_left + hygrometer_right)/2;
 
     char value[8];
-    float gypsum_voltage = hygrometer_left*(INPUT_VOLTAGE)/1024;
+    float gypsum_voltage = hygrometer_reading*(INPUT_VOLTAGE)/1024;
     unsigned long hygrometer_resistance = (HYGROMETER_RESISTANCE * (INPUT_VOLTAGE- DIODE_FORWARD_VOLTAGE))/gypsum_voltage - HYGROMETER_RESISTANCE;
     dtostrf(gypsum_voltage, 0, 3, value);
-    Log.Verbose(P("Gypsum voltage:\t%sV"), value);
+    Log.Verbose(P("Gypsum voltage: %sV\t resistance: %l ohms"), value, hygrometer_resistance);
 
     Log.Debug(P("Hygrometer %d reading: %d"), sensor_number, hygrometer_reading);
 	return hygrometer_reading;
@@ -132,7 +169,6 @@ void update_gypsum_sensors(){
 
 //////////////////////////////////////////////////////////////////////////
 // Soil Moisture (DFRobot Moisture Sensor (Fork))
-
 void start_soil_forks(){
 	/**
 	* Initialise the soil moisture sensor
@@ -173,11 +209,12 @@ void update_soil_fork_moisture(){
 
 ////////////////////////////////////////////////////////////////////////////////
 // Load cells
-
 void start_load_cells(){
     for (int i = 0; i < NUM_LOAD_CELLS; i++) {
         load_cells[i].power_up();
         load_cells[i].set_scale(LOAD_CELL_CALIBRATION_FACTOR);
+        load_cells[i].tare();
+
     }
 
     timer.setInterval(SAMPLE_INTERVAL, update_load_cells);
@@ -204,7 +241,6 @@ float get_mass(int load_cell_number){
 
 //////////////////////////////////////////////////////////////////////////
 // WiFi
-
 void start_wifi(){
 	Log.Info(P("Starting WiFi..."));
     wifi.setBootMarker(F("Version:0.9.2.4]\r\n\r\nready"));
@@ -271,7 +307,7 @@ void assemble_data_packet(char* packet_buffer){
     }
 
     for (int i = 0; i < NUM_LOAD_CELLS; i++) {
-        sprintf(entry, P("&mass%d=%d"), i, data.mass[i]);
+        sprintf(entry, P("&mass%d=%d"), i, int(data.mass[i]));
         add_to_array(packet_buffer, entry);
     }
 }
